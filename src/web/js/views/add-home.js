@@ -157,7 +157,9 @@ export function openAddHome(prefill = {}) {
       h('button', { type: 'button', class: 'linkbtn', onclick: () => { closeDialog(); go('#/profile'); } }, 'Fill in my profile'))
     : null;
   const footer = h('p', { class: 'fine' }, health
-    ? (health.demo ? 'Demo mode: assessments come from simple keyword rules, not AI.' : `Assessed by ${health.model}. AI can make mistakes; you can correct any fact afterwards.`)
+    ? (health.demo
+      ? 'Demo mode: assessments come from simple keyword rules, not AI.'
+      : `NestWorth uses AI (${health.model}) to assess listings. The listing, with phone numbers and email addresses removed, and your search criteria are sent to ${health.provider}; your finances aren’t. AI can make mistakes, and you can correct any fact afterwards.`)
     : (ui.healthError || 'Checking the server…'));
 
   openDialog('Add a home', [notice, tabs, body, researchRow, status, submit, footer], {

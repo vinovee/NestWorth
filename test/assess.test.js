@@ -45,7 +45,7 @@ test('a valid answer is returned with provenance', async () => {
   const out = await assess(input());
   assert.equal(out.assessment.verdict, 'worth_viewing');
   assert.equal(out.meta.model, 'test-model');
-  assert.equal(out.meta.promptVersion, 'assess-listing@1');
+  assert.equal(out.meta.promptVersion, 'assess-listing@2');
   assert.equal(out.meta.assessedAt, '2026-11-17T12:00:00.000Z');
   assert.equal(out.meta.source.type, 'pasted');
   const sent = requests[0];
@@ -167,6 +167,35 @@ test('demo provider output is always schema-valid', async () => {
     const out = await assess(input({ text }));
     assert.equal(validateAssessment(out.assessment).ok, true, file);
   }
+});
+
+test('contact details are removed before the listing reaches the AI', async () => {
+  const withContacts = `${LISTING}\nTo view, call 0161 496 0731 or email viewings@sampleford-homes.example.`;
+  const { provider, requests } = scripted([{ text: JSON.stringify(sampleAssessment()) }]);
+  const assess = createAssessor({ provider, config, prompts, fetchListing: noFetch, log });
+  const out = await assess(input({ text: withContacts }));
+  const sent = requests[0].messages[0].content;
+  assert.equal(sent.includes('0161 496 0731'), false);
+  assert.equal(sent.includes('viewings@sampleford-homes.example'), false);
+  assert.match(sent, /\[phone number removed\] or email \[email address removed\]/);
+  assert.equal(out.meta.privacy.contactDetailsRemoved, 2);
+  assert.equal(out.listingText.includes('0161 496 0731'), false, 'the saved copy is redacted too');
+});
+
+test('every assessment carries a machine-readable AI disclosure', async () => {
+  const { provider } = scripted([{ text: JSON.stringify(sampleAssessment()) }]);
+  const ai = await createAssessor({ provider, config, prompts, fetchListing: noFetch, log })(input());
+  assert.equal(ai.meta.aiDisclosure.aiGenerated, true);
+  assert.equal(ai.meta.aiDisclosure.digitalSourceType, 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia');
+  assert.equal(ai.meta.aiDisclosure.generator, 'scripted/test-model');
+  const demo = await createAssessor({ provider: createMockProvider(), config, prompts, fetchListing: noFetch, log })(input());
+  assert.equal(demo.meta.aiDisclosure.aiGenerated, false);
+  assert.match(demo.meta.aiDisclosure.digitalSourceType, /\/algorithmicMedia$/);
+});
+
+test('both prompts carry the fairness rules', () => {
+  assert.match(prompts.assess.text, /## Fairness[\s\S]*protected characteristic/);
+  assert.match(prompts.research.text, /never about who lives there/);
 });
 
 test('parseJson and verifySources helpers', () => {

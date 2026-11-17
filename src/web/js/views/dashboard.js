@@ -41,7 +41,7 @@ function welcome() {
       h('button', { type: 'button', class: 'btn primary', onclick: () => go('#/profile') }, missing.length && !state.profileSaved ? 'Set up my profile' : 'Review my profile'),
       state.profileSaved ? h('button', { type: 'button', class: 'btn', onclick: () => openAddHome() }, 'Add a home') : null,
       h('button', { type: 'button', class: 'btn ghost', onclick: () => loadDemo() }, 'Try it with example data')),
-    h('p', { class: 'fine' }, `Your profile, homes and notes stay in this browser. When you assess a listing, its text and your search criteria (not your sale price, mortgage or savings) go to ${provider}.`));
+    h('p', { class: 'fine' }, `Your profile, homes and notes stay in this browser. When you assess a listing, its text and your search criteria (not your sale price, mortgage or savings) go to ${provider}, with phone numbers and email addresses removed first.${ui.health?.demo ? '' : ' Assessments are AI-generated and labelled as such.'}`));
 }
 
 function glancePanel() {

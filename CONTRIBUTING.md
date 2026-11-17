@@ -16,6 +16,8 @@ npm run check       # lint, types, tests and demo evals: run before every pull r
 - **Maths in code.** Anything that must be exact goes in `src/shared/finance.js` or `policy.js` with tests, not in a prompt.
 - **Prompts are code.** If you change a prompt, bump its `version`, run `npm run eval` against a real provider and paste the results in the pull request.
 - **Tax rules need sources.** Add a worked example from the official source as a test, and update `RULES_LAST_CHECKED` and `docs/finance-and-tax.md`.
+- **Places, not people.** The AI must never describe or rate an area by who lives there. Keep the `area-fairness` eval passing, and add a case if you find a listing that trips it up.
+- **Say when it's AI.** Keep the "AI-generated" labels, the `aiDisclosure` metadata and the notices about what is sent to the AI provider. See [docs/compliance.md](docs/compliance.md).
 - **Untrusted text stays text.** Build DOM with `h()`; never use `innerHTML` with data. Keep the CSP strict: no inline scripts or styles.
 - **No runtime dependencies** without discussing it first (see ADR 0003).
 

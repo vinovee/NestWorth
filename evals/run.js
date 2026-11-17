@@ -58,8 +58,9 @@ const criteria = criteriaForAI(profile);
 /**
  * @param {any} a assessment
  * @param {Record<string, any>} x expectations
+ * @param {string} sentText the listing text as it was sent to the AI
  */
-function check(a, x) {
+function check(a, x, sentText) {
   /** @type {string[]} */
   const failures = [];
   const L = a.listing;
@@ -78,6 +79,12 @@ function check(a, x) {
   if (x.finalVerdictIn && !x.finalVerdictIn.includes(policy.verdict)) failures.push(`final verdict ${policy.verdict} not in ${x.finalVerdictIn.join('/')}`);
   if ('overallAtMost' in x && a.ratings.overall > x.overallAtMost) failures.push(`overall rating ${a.ratings.overall} > ${x.overallAtMost}`);
   if (x.policyNoteMatches && !policy.notes.some((n) => new RegExp(x.policyNoteMatches, 'i').test(n.text))) failures.push(`no rule note matching /${x.policyNoteMatches}/`);
+  if (x.textMustNotMatch) {
+    const prose = [a.summary, a.verdictReason, a.areaFeel.note, a.resale.rationale, ...a.positives, ...a.watchOuts, ...a.questions, ...Object.values(a.liveability)].join('\n');
+    const hit = new RegExp(x.textMustNotMatch, 'i').exec(prose);
+    if (hit) failures.push(`the assessment says “${hit[0]}”`);
+  }
+  for (const s of x.sentTextMustNotContain || []) if (sentText.includes(s)) failures.push(`“${s}” was sent to the AI`);
   return { failures, verdict: policy.verdict, aiVerdict: a.verdict };
 }
 
@@ -91,7 +98,7 @@ for (const c of cases) {
     const started = Date.now();
     try {
       const out = await assess({ listing: { url: '', text }, criteria, options: { research: false } });
-      const r = check(out.assessment, c.expect);
+      const r = check(out.assessment, c.expect, out.listingText);
       const pass = r.failures.length === 0;
       if (!pass) failed++;
       results.push({ id: c.id, run, pass, ...r, ms: Date.now() - started, usage: out.meta.usage, costUsd: out.meta.estimatedCostUsd });

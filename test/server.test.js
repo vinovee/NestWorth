@@ -45,7 +45,7 @@ test('health reports capabilities', async () => {
   assert.equal(j.ok, true);
   assert.equal(j.demo, true);
   assert.equal(j.authRequired, false);
-  assert.equal(j.promptVersion, 'assess-listing@1');
+  assert.equal(j.promptVersion, 'assess-listing@2');
 });
 
 test('the web app is served with strict security headers', async () => {

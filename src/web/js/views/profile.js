@@ -1,6 +1,6 @@
 // @ts-check
 /** Your inputs. Everything the app needs to know about you, kept in this browser. */
-import { h, mount } from '../dom.js';
+import { h, mount, extLink } from '../dom.js';
 import { ui, toast, openDialog, closeDialog, go } from '../ui.js';
 import { getState, setProfile, exportJson, importJson, clearAll } from '../store.js';
 import * as api from '../api.js';
@@ -11,6 +11,8 @@ import { cashAvailable, equityFromSale, maxPriceForMonthly, maxPriceForDeposit, 
 import { money, shortDate, parseAmount } from '../../../shared/format.js';
 
 /** @typedef {import('../../../shared/profile.js').Profile} Profile */
+
+const DOCS = 'https://github.com/vinovee/NestWorth/blob/main/docs/';
 
 /** A working copy, so half-typed values don't fight the saved profile. */
 /** @type {Profile} */
@@ -198,6 +200,8 @@ export function renderProfile(main) {
         h('div', null, h('dt', null, 'Reading links'), h('dd', null, health.listingFetch ? 'Yes, where websites allow it' : 'Off: paste listing text instead')),
         h('div', null, h('dt', null, 'Prompt'), h('dd', null, health.promptVersion)))
       : h('p', { class: 'error' }, ui.healthError || 'Couldn’t reach the server.'),
+    h('p', { class: 'fine' }, 'Assessments are AI-generated and labelled. Phone numbers and email addresses are removed from listings before they’re sent, and your sale price, mortgage and savings never leave this browser. How NestWorth uses AI, and its limits: ',
+      extLink(`${DOCS}responsible-ai.md`, 'responsible AI notes', 'slink'), '.'),
     health?.webResearch ? checkbox('ai.research', 'Research the area on the web by default (slower; uses web search credits)') : null,
     health?.authRequired ? h('div', { class: 'field' },
       h('label', { class: 'flabel', for: 'p-token' }, 'Access token'),

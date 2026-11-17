@@ -74,6 +74,16 @@ Listing text and web pages are written by third parties and can contain instruct
 
 The browser sends `criteriaForAI(profile)`: destination, office days, commute limits, budget figures, a derived "affordable at your ceiling" price, types, bedrooms, must-haves, exclusions, areas and free-text notes. It never sends the sale price, mortgage balance, savings or rates. A test checks that these don't leak.
 
+Before a listing goes to the AI, the server removes phone numbers and email addresses ([`redact.js`](../src/shared/redact.js)): agents' and sellers' contact details aren't needed to assess a home. The saved copy is redacted too, and the card says how many were removed.
+
+## Transparency
+
+Every assessment carries `meta.aiDisclosure`: whether it is AI-generated, an [IPTC digital source type](https://cv.iptc.org/newscodes/digitalsourcetype/) (`trainedAlgorithmicMedia`, or `algorithmicMedia` for demo mode) and the generator. It travels with the home into saved data and exports, and the card carries matching `data-ai-generated` attributes alongside a visible "AI-generated" label. This is how NestWorth supports Article 50 of the EU AI Act; see [compliance.md](compliance.md).
+
+## Fairness
+
+Both prompts tell the model to judge areas by the place, never by the protected characteristics of the people who live there, and to treat places of worship, schools and shops as amenities (distances and journey times). The `area-fairness` eval case checks the assessment's text for descriptions of residents and checks that the agent's contact details never reached the model.
+
 ## Evals
 
 `evals/cases.json` holds fictional listings with expectations about extraction (price, type, bedrooms), flags and the **final** verdict after the buyer's rules. `npm run eval` runs them through the real pipeline with your configured provider and saves results to `evals/results/` for comparison; `--repeat 3` shows run-to-run variation. CI runs the same cases in demo mode to keep the harness working.

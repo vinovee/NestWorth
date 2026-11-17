@@ -6,7 +6,7 @@ Please report security problems **privately**, not in a public issue: use **[Rep
 
 ## Scope
 
-In scope: the server (`src/server`), the web app (`src/web`), shared code and the default configuration. Examples: server-side request forgery through listing links, bypassing the access token or rate limits, script injection through listing or AI text, leaking criteria or keys into logs, and prompt injection that leads to anything beyond a misleading assessment.
+In scope: the server (`src/server`), the web app (`src/web`), shared code and the default configuration. Examples: server-side request forgery through listing links, bypassing the access token or rate limits, script injection through listing or AI text, leaking criteria or keys into logs, sending your finances or a listing's contact details to the AI provider, and prompt injection that leads to anything beyond a misleading assessment.
 
 Out of scope: problems that need an attacker to already control your server, your browser or your AI provider account; and the accuracy of AI assessments (please open a normal issue, without personal details).
 

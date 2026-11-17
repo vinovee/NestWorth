@@ -19,6 +19,7 @@ const MODE = /** @type {Record<string, string>} */ ({
 const TENURE = /** @type {Record<string, string>} */ ({ freehold: 'Freehold', leasehold: 'Leasehold', share_of_freehold: 'Share of freehold', commonhold: 'Commonhold', unknown: 'Not stated' });
 const label = (/** @type {Record<string, string>} */ map, /** @type {string} */ k) => map[k] || k;
 const NS = 'Not stated';
+const IPTC = 'http://cv.iptc.org/newscodes/digitalsourcetype/';
 
 /** @param {string} verdict */
 export function pill(verdict) {
@@ -52,7 +53,13 @@ export function renderCard(home, pos) {
   const f = x.facts;
   const t = trackOf(home.id);
   const o = home.overrides || {};
+  const m = home.meta || {};
   const edited = (/** @type {string} */ k) => (k in o ? h('span', { class: 'badge' }, 'edited') : null);
+  // Transparency (EU AI Act, Article 50): say what made this assessment, visibly and in the markup.
+  const madeBy = home.source.type === 'manual' || m.provider === 'manual' ? 'manual' : m.provider === 'demo' ? 'demo' : 'ai';
+  const disclosure = m.aiDisclosure || (madeBy === 'ai' ? { aiGenerated: true, digitalSourceType: `${IPTC}trainedAlgorithmicMedia` } : madeBy === 'demo' ? { aiGenerated: false, digitalSourceType: `${IPTC}algorithmicMedia` } : null);
+  const madeByTag = h('span', { class: 'badge', title: madeBy === 'ai' ? 'Written by an AI system. It can be wrong.' : '' },
+    madeBy === 'ai' ? 'AI-generated' : madeBy === 'demo' ? 'Demo: keyword rules' : 'Added by hand');
 
   // Archived notice
   let archived = null;
@@ -189,7 +196,7 @@ export function renderCard(home, pos) {
 
   // AI take
   const take = h('section', { class: 'take' },
-    h('h3', null, 'The AI’s take'),
+    h('h3', null, 'The AI’s take', madeByTag),
     h('p', { class: 'lead' }, a.summary),
     h('p', { class: 'muted' }, h('b', null, `${label(VERDICT_LABELS, a.verdict)}: `), a.verdictReason));
 
@@ -217,7 +224,7 @@ export function renderCard(home, pos) {
 
   const missing = a.missingInfo.length ? fold('Missing from the listing', `${a.missingInfo.length}`, [list('ask', a.missingInfo, '')]) : null;
 
-  const m = home.meta || {};
+  const removed = m.privacy?.contactDetailsRemoved || 0;
   const usage = m.usage ? `${((m.usage.inputTokens || 0) + (m.usage.outputTokens || 0)).toLocaleString('en-GB')} tokens${m.usage.webSearches ? `, ${m.usage.webSearches} web searches` : ''}` : '';
   const provenance = fold('Sources and how this was made', a.sources.length ? `${a.sources.length} source${a.sources.length === 1 ? '' : 's'}` : '', [
     a.sources.length
@@ -226,12 +233,17 @@ export function renderCard(home, pos) {
     h('p', { class: 'fine' }, home.source.type === 'manual'
       ? 'Added by hand, not assessed by AI.'
       : `Assessed${m.model ? ` by ${m.model}` : ''}${m.provider === 'demo' ? ' (demo mode: keyword rules, not AI)' : ''}${m.assessedAt ? ` on ${shortDate(m.assessedAt)}` : ''}${m.promptVersion ? `, prompt ${m.promptVersion}` : ''}${m.research?.used ? ', with web research' : ', from the listing only'}${usage ? `, ${usage}` : ''}. AI can get things wrong: check anything you rely on.`),
+    removed ? h('p', { class: 'fine' }, `${removed} phone number${removed === 1 ? ' or email address was' : 's or email addresses were'} removed from the listing before it was sent to the AI.`) : null,
     ...(Array.isArray(m.warnings) ? m.warnings : []).map((/** @type {string} */ w) => h('p', { class: 'fine warn' }, w)),
   ]);
 
   const statusChip = t.status && t.status !== RULED_OUT ? h('p', { class: 'stage' }, t.status) : null;
 
-  return h('article', { class: ['card', `v-${VCLS[x.verdict]}`, t.status === RULED_OUT && 'is-arch'], id: 'card', 'aria-label': L.title },
+  return h('article', {
+    class: ['card', `v-${VCLS[x.verdict]}`, t.status === RULED_OUT && 'is-arch'], id: 'card', 'aria-label': L.title,
+    'data-ai-generated': disclosure ? String(Boolean(disclosure.aiGenerated)) : 'false',
+    'data-digital-source-type': disclosure?.digitalSourceType || null,
+  },
     archived,
     h('div', { class: 'card-top' },
       h('span', { class: 'rankline' }, `${ordinal(pos.index + 1)} of ${pos.count} ${pos.where}, by ${pos.sortPhrase}`),

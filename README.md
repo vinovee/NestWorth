@@ -104,16 +104,28 @@ The AI does what it's good at (reading messy listings, judging fit, spotting ris
 - **Your rules in code.** [`src/shared/policy.js`](src/shared/policy.js) can only lower a verdict, and says why.
 - **Untrusted text stays data.** Listings and web pages are wrapped in randomly named delimiters, the model is told to treat them as data, and attempts to steer it are flagged. An eval case checks this.
 - **Citations are checked.** An assessment may only cite the listing and pages the web search actually returned; anything else is removed and you're told.
-- **Data minimisation.** The AI gets your criteria and a derived price limit, never your sale price, mortgage balance or savings.
+- **Data minimisation.** The AI gets your criteria and a derived price limit, never your sale price, mortgage balance or savings. Phone numbers and email addresses in listings are removed before they're sent.
 - **Provenance on every home.** Model, prompt version, date, sources, token use and any warnings are shown on each card.
 - **Evals.** `npm run eval` runs fictional listings (including shared ownership, retirement, renovation, an auction, an over-budget home and a prompt-injection attempt) through the real pipeline and checks extraction, flags and final verdicts.
 - **Prompts are versioned files** in [`prompts/`](prompts/), reviewed like code.
+- **Labelled and marked.** AI content is labelled "AI-generated" and carries machine-readable `aiDisclosure` metadata, in line with Article 50 of the EU AI Act.
+- **Fair about places.** Areas are judged by transport, amenities, crime and flood data, development and prices, never by who lives there. An eval case checks this.
+
+## Responsible AI and compliance
+
+NestWorth keeps a person in charge of every decision, labels and marks AI-generated content, never sends your finances, removes contact details from listings and judges areas by the place rather than the people.
+
+- [docs/responsible-ai.md](docs/responsible-ai.md) is the AI system card: purpose, out-of-scope uses, oversight, transparency, fairness, limitations and evaluation.
+- [docs/compliance.md](docs/compliance.md) maps the design to the EU AI Act, UK data protection law, the NIST AI RMF and its Generative AI Profile, and the OWASP Top 10 for LLM Applications 2026, with a checklist for anyone hosting NestWorth for other people.
+- [docs/privacy-notice-template.md](docs/privacy-notice-template.md) is a starting point for that privacy notice.
+
+These are engineering documents, not legal advice.
 
 ## Privacy
 
 - The server is stateless: it stores nothing and logs no listing text, criteria or keys.
 - Your profile, homes and notes live in your browser's local storage. **Export** regularly if they matter to you; clearing site data deletes them.
-- When you assess a listing, its text and your search criteria go to the AI provider configured on the server, under that provider's data terms.
+- When you assess a listing, its text and your search criteria go to the AI provider configured on the server, under that provider's data terms. Phone numbers and email addresses in the listing are removed first.
 - "Check the commute" links open Google Maps with the listing address and your destination, only when you tap them.
 
 ## Security
