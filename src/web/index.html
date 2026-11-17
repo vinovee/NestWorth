@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="AI home-search assistant for UK buyers: your numbers, your rules, a detailed picture of every home.">
+  <title>NestWorth</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/js/main.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="wrap">
+      <div class="titlebar">
+        <div>
+          <h1>NestWorth</h1>
+          <p class="lede">Your numbers, your rules, a detailed picture of every home.</p>
+        </div>
+        <button class="btn primary" id="addHomeBtn" type="button">Add home</button>
+      </div>
+      <nav class="seg" aria-label="Main">
+        <a class="segb" href="#/dashboard" data-route="dashboard">Dashboard</a>
+        <a class="segb" href="#/homes" data-route="homes">Homes</a>
+        <a class="segb" href="#/profile" data-route="profile">Profile</a>
+      </nav>
+      <p class="banner" id="banner" hidden></p>
+    </div>
+  </header>
+
+  <main class="wrap" id="main" tabindex="-1">
+    <noscript><p class="panel">NestWorth needs JavaScript to run.</p></noscript>
+  </main>
+
+  <nav class="pager" id="pager" aria-label="Move between homes" hidden></nav>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <p class="sr-only" id="live" aria-live="polite"></p>
+
+  <dialog class="sheet" id="dialog" aria-labelledby="dialogTitle"></dialog>
+
+  <footer class="foot wrap">
+    <p>Estimates and AI assessments can be wrong. Check important facts yourself, and speak to a mortgage broker or conveyancer before you commit. Not financial or legal advice.</p>
+    <p id="serverInfo"></p>
+  </footer>
+</body>
+</html>

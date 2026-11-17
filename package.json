@@ -1,0 +1,52 @@
+{
+  "name": "nestworth",
+  "version": "0.1.0",
+  "description": "AI home-search assistant for UK buyers: your numbers, your rules, a detailed picture of every home.",
+  "license": "MIT",
+  "author": "Vino Veeraiyan (https://github.com/vinovee)",
+  "homepage": "https://github.com/vinovee/NestWorth#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vinovee/NestWorth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vinovee/NestWorth/issues"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node --watch src/server/index.js",
+    "demo": "node src/server/index.js --demo",
+    "test": "node --test \"test/**/*.test.js\"",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "eval": "node evals/run.js",
+    "eval:mock": "node evals/run.js --provider mock",
+    "check": "npm run lint && npm run typecheck && npm test && npm run eval:mock"
+  },
+  "keywords": [
+    "property",
+    "home-search",
+    "house-hunting",
+    "mortgage",
+    "stamp-duty",
+    "real-estate",
+    "uk",
+    "self-hosted",
+    "local-first",
+    "llm",
+    "ai",
+    "claude"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.19.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "typescript": "^7.0.2"
+  }
+}

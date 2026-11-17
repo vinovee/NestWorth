@@ -1,0 +1,35 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Please don't paste personal details** (your address, finances, API keys) or a full export file. For security problems, follow SECURITY.md instead of opening an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+  - type: input
+    id: provider
+    attributes:
+      label: AI provider and model
+      placeholder: e.g. anthropic / claude-sonnet-5-5, or demo mode
+  - type: input
+    id: env
+    attributes:
+      label: Browser, operating system and Node version
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log lines
+      description: Include the request ID shown with the error if there is one. Logs never contain listing text or criteria.
+      render: shell

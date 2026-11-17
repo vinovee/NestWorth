@@ -1,0 +1,15 @@
+# docker compose up --build
+# Reads settings from .env. Because the container listens on all interfaces,
+# APP_ACCESS_TOKEN must be set (or ALLOW_UNAUTHENTICATED=true if something else protects it).
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8787:8787"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
