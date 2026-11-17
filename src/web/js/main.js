@@ -8,6 +8,7 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderHomes, homesKeydown } from './views/homes.js';
 import { renderProfile, refreshSummary } from './views/profile.js';
 import { wireAddButton } from './views/add-home.js';
+import { startScheduler } from './refresh.js';
 
 function parseRoute() {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
@@ -85,6 +86,7 @@ api.health().then((health) => {
     ? `Running in demo mode · version ${health.version}`
     : `AI: ${health.provider}, ${health.model} · prompt ${health.promptVersion} · version ${health.version}`));
   render();
+  startScheduler();
 }).catch((err) => {
   ui.healthError = err instanceof api.ApiError ? err.message : 'Couldn’t reach the server.';
   render();

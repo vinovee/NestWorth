@@ -59,14 +59,33 @@ export async function health() {
  * @param {{ listing: { url: string, text: string }, criteria: unknown, options: { research: boolean } }} payload
  * @param {AbortSignal} [signal]
  */
-export async function assess(payload, signal) {
+export function assess(payload, signal) {
+  return post('/api/assess', payload, signal);
+}
+
+/**
+ * Re-read a listing link. The server only assesses it again if the price or
+ * availability differs from `previous`.
+ * @param {{ listing: { url: string }, previous: { price: number | null, status: string }, criteria: unknown, options: { research: boolean } }} payload
+ * @param {AbortSignal} [signal]
+ */
+export function refresh(payload, signal) {
+  return post('/api/refresh', payload, signal);
+}
+
+/**
+ * @param {string} path
+ * @param {unknown} payload
+ * @param {AbortSignal} [signal]
+ */
+async function post(path, payload, signal) {
   /** @type {Record<string, string>} */
   const headers = { 'content-type': 'application/json', accept: 'application/json' };
   const token = getToken();
   if (token) headers.authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetch('/api/assess', { method: 'POST', headers, body: JSON.stringify(payload), signal });
+    res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload), signal });
   } catch {
     if (signal?.aborted) throw new ApiError('CANCELLED', 'Cancelled.');
     throw new ApiError('NETWORK', 'Couldn’t reach the app server. Is it still running?');

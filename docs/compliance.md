@@ -71,10 +71,10 @@ Of the twelve generative AI risks in NIST AI 600-1, these matter most here:
 | --- | --- |
 | LLM01 Prompt Injection | Untrusted text goes inside delimiters with a random name per request; the system prompt says it's data; attempts are flagged and the verdict capped; an eval case tests it. |
 | LLM02 Sensitive Information Disclosure | Finances never sent; contact details removed; no content or secrets in logs; API keys stay on the server. |
-| LLM03 Excessive Agency | No tools except optional web search; output is validated data; nothing acts on the user's behalf. |
+| LLM03 Excessive Agency | No tools except optional web search; output is validated data; nothing acts on the user's behalf. Scheduled re-checks only re-read public pages the buyer added (respecting `robots.txt`) and never change a home's status. |
 | LLM04 Supply Chain | No runtime dependencies; dev dependencies locked; Dependabot, `npm audit` and CodeQL. |
 | LLM05 Data and Model Poisoning | No training, fine-tuning or retrieval store; web research is treated as untrusted and must be cited. |
-| LLM06 Unbounded Consumption | Per-client rate limit, daily cap, concurrency cap, token limits and request size limits. |
+| LLM06 Unbounded Consumption | Per-client rate limit, daily cap, concurrency cap, token limits and request size limits. Scheduled re-checks call the AI only when a listing's price or availability changed, pause between homes and stop when the server reports a limit. |
 | LLM07 Misinformation | Schema, "Not stated" for unknowns, no invented figures, source checks, maths in code, labels and warnings. |
 | LLM08 Hidden Context Exposure | Prompts are public in the repository, and nothing secret goes into the model's context. |
 | LLM09 Vector and Embedding Weaknesses | Not applicable: no embeddings or vector store. |

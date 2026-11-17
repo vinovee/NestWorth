@@ -7,15 +7,20 @@ import { loadConfig } from '../src/server/config.js';
 import { createLogger } from '../src/server/logger.js';
 import { createMockProvider } from '../src/server/ai/providers/mock.js';
 import { criteriaForAI, EXAMPLE_PROFILE } from '../src/shared/profile.js';
+import { listingFingerprint } from '../src/shared/fingerprint.js';
+import { AppError } from '../src/server/errors.js';
 
 const LISTING = readFileSync(new URL('../examples/listings/oak-lane-new-semi.txt', import.meta.url), 'utf8');
 const body = (over = {}) => JSON.stringify({ listing: { url: '', text: LISTING }, criteria: criteriaForAI(EXAMPLE_PROFILE), options: { research: false }, ...over });
+const noFetch = async () => {
+  throw new Error('no fetch in tests');
+};
 
 /** Start an app on a random port. */
-async function start(env) {
+async function start(env, fetchListing = noFetch) {
   const { config, errors } = loadConfig({ LLM_PROVIDER: 'mock', ...env }, []);
   assert.deepEqual(errors, []);
-  const app = createApp({ config, provider: createMockProvider(), fetchListing: async () => { throw new Error('no fetch in tests'); }, log: createLogger('silent') });
+  const app = createApp({ config, provider: createMockProvider(), fetchListing, log: createLogger('silent') });
   const server = http.createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   return { server, base: `http://127.0.0.1:${server.address().port}` };
@@ -24,15 +29,51 @@ async function start(env) {
 let open;
 let locked;
 let strict;
+let linked;
 before(async () => {
   open = await start({ RATE_LIMIT_PER_10_MIN: '100' });
   locked = await start({ APP_ACCESS_TOKEN: 'correct-horse-battery-staple' });
   strict = await start({ RATE_LIMIT_PER_10_MIN: '2' });
+  linked = await start({ RATE_LIMIT_PER_10_MIN: '100' }, async (url) => {
+    if (url.endsWith('/gone')) throw new AppError(404, 'LISTING_GONE', 'That page wasn’t found.');
+    return { finalUrl: url, title: 'Oak Lane', text: LISTING };
+  });
 });
 after(() => {
   open.server.close();
   locked.server.close();
   strict.server.close();
+  linked.server.close();
+});
+
+const refreshBody = (previous, url = 'https://www.example.com/homes/1') =>
+  JSON.stringify({ listing: { url }, previous, criteria: criteriaForAI(EXAMPLE_PROFILE), options: { research: false } });
+const postTo = (base, path, payload) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload });
+
+test('a refresh re-assesses only when the listing changed', async () => {
+  const same = await (await postTo(linked.base, '/api/refresh', refreshBody(listingFingerprint(LISTING)))).json();
+  assert.equal(same.changed, false);
+  assert.deepEqual(same.fingerprint, { price: 330000, status: 'available' });
+  assert.equal(same.assessment, undefined);
+
+  const res = await postTo(linked.base, '/api/refresh', refreshBody({ price: 350000, status: 'available' }));
+  assert.equal(res.status, 200);
+  const changed = await res.json();
+  assert.deepEqual(changed.changes, ['The price dropped from £350,000 to £330,000.']);
+  assert.equal(changed.assessment.listing.price, 330000);
+  assert.equal(changed.meta.source.type, 'link');
+
+  const gone = await (await postTo(linked.base, '/api/refresh', refreshBody({ price: 330000, status: 'available' }, 'https://www.example.com/gone'))).json();
+  assert.equal(gone.gone, true);
+});
+
+test('refresh requests are validated', async () => {
+  const noPrevious = JSON.stringify({ listing: { url: 'https://www.example.com/homes/1' }, criteria: criteriaForAI(EXAMPLE_PROFILE), options: { research: false } });
+  assert.equal((await postTo(linked.base, '/api/refresh', noPrevious)).status, 400);
+  assert.equal((await postTo(linked.base, '/api/refresh', refreshBody({ price: 1, status: 'gone' }))).status, 400);
+  assert.equal((await fetch(`${linked.base}/api/refresh`)).status, 405);
+  const cross = await fetch(`${linked.base}/api/refresh`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: refreshBody({ price: 1, status: 'available' }) });
+  assert.equal(cross.status, 403, 'cross-site refreshes are refused');
 });
 
 const post = (base, payload, headers = {}) =>

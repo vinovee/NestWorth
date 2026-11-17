@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { createAssessor, parseJson } from '../src/server/ai/assess.js';
+import { createAssessor, createRefresher, parseJson } from '../src/server/ai/assess.js';
+import { AppError } from '../src/server/errors.js';
 import { loadPrompts, parseAssessmentMessage } from '../src/server/ai/prompts.js';
 import { createMockProvider } from '../src/server/ai/providers/mock.js';
 import { verifySources } from '../src/server/ai/sources.js';
@@ -196,6 +197,48 @@ test('every assessment carries a machine-readable AI disclosure', async () => {
 test('both prompts carry the fairness rules', () => {
   assert.match(prompts.assess.text, /## Fairness[\s\S]*protected characteristic/);
   assert.match(prompts.research.text, /never about who lives there/);
+});
+
+test('a refresh only asks the AI when the price or availability changed', async () => {
+  const { provider, requests } = scripted([{ text: JSON.stringify(sampleAssessment()) }]);
+  const url = 'https://www.example.com/homes/1';
+  let page = { finalUrl: url, title: 'Oak Lane', text: LISTING };
+  let charged = 0;
+  const refresh = createRefresher({ provider, config, prompts, fetchListing: async () => page, log, now: () => new Date('2026-11-20T08:00:00Z') });
+  const req = () => ({ listing: { url }, previous: { price: 330000, status: 'available' }, criteria, options: { research: false } });
+  const ctx = { beforeAi: () => { charged++; } };
+
+  const same = await refresh(req(), ctx);
+  assert.deepEqual(same, { changed: false, gone: false, checkedAt: '2026-11-20T08:00:00.000Z', fingerprint: { price: 330000, status: 'available' } });
+
+  page = { ...page, finalUrl: 'https://www.example.com/search?area=sampleford' };
+  const moved = await refresh(req(), ctx);
+  assert.equal(moved.gone, true);
+  assert.match(moved.changes[0], /different page/);
+
+  page = { ...page, finalUrl: `${url}/`, text: LISTING.replace(/£[\d,]+/g, 'POA') };
+  const noPrice = await refresh(req(), ctx);
+  assert.equal(noPrice.gone, true);
+  assert.match(noPrice.changes[0], /no longer shows a price/);
+  assert.equal(requests.length, 0, 'never asks the AI to assess a page that may not be the listing');
+  assert.equal(charged, 0, 'unchanged and withdrawn checks don’t count towards the daily cap');
+
+  page = { finalUrl: url, title: 'Oak Lane', text: `${LISTING}\nUNDER OFFER` };
+  const offer = await refresh(req(), ctx);
+  assert.equal(offer.changed, true);
+  assert.deepEqual(offer.changes, ['It’s now marked as under offer or reserved.']);
+  assert.equal(offer.meta.source.type, 'link');
+  assert.deepEqual(offer.meta.fingerprint, { price: 330000, status: 'under_offer' });
+  assert.equal(requests.length, 1);
+  assert.equal(charged, 1);
+});
+
+test('a listing page that has gone is reported, not treated as an error', async () => {
+  const { provider } = scripted([]);
+  const refresh = createRefresher({ provider, config, prompts, fetchListing: async () => { throw new AppError(404, 'LISTING_GONE', 'Gone.'); }, log });
+  const out = await refresh({ listing: { url: 'https://www.example.com/homes/1' }, previous: { price: 1, status: 'available' }, criteria, options: { research: false } });
+  assert.equal(out.gone, true);
+  assert.match(out.changes[0], /has gone/);
 });
 
 test('parseJson and verifySources helpers', () => {

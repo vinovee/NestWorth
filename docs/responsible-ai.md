@@ -35,7 +35,7 @@ The AI can't act on anyone's behalf. It can't send messages, spend money or chan
 - Every verdict comes with its reasons, the evidence for each criterion, and any change the buyer's own rules made to it.
 - The buyer can correct any key fact. Costs, rules and verdicts update straight away.
 - The buyer decides what happens to each home: shortlist, view, offer or rule out.
-- Assessments run only when the buyer asks for one.
+- Assessments run when the buyer asks for one, and when a scheduled re-check (weekly by default; daily or off in the profile) finds that a listing the buyer added by link has changed its price or availability. Re-checks never change a home's status, notes or the buyer's corrections, and a listing that may have been withdrawn is flagged for the buyer to decide, not ruled out automatically.
 
 ## Transparency
 
@@ -79,7 +79,7 @@ Prompts are versioned files in [`prompts/`](../prompts/). Every assessment recor
 
 ## Environmental impact
 
-Prompts are short, the fixed system prompt is cached between assessments, web research is off by default, and nothing runs in the background unless the buyer switches it on.
+Prompts are short, the fixed system prompt is cached between assessments and web research is off by default. Scheduled re-checks read the listing page and only call the AI when the price or availability has changed, and they can be switched off.
 
 ## Feedback
 

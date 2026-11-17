@@ -1,21 +1,26 @@
 // @ts-check
 /**
  * The assessment pipeline:
- *   1. get the listing text (pasted, or fetched safely from a link);
+ *   1. get the listing text (pasted, or fetched safely from a link) and remove
+ *      phone numbers and email addresses;
  *   2. optionally research the area with web search (Anthropic only);
  *   3. ask for a structured assessment that must match the schema;
  *   4. validate it, and if it doesn't fit, show the model the problems and retry;
  *   5. drop any source links the model could not have read;
- *   6. return the assessment with full provenance (model, prompt version, usage).
+ *   6. return the assessment with full provenance (model, prompt version, usage),
+ *      a machine-readable AI disclosure and the listing's fingerprint.
  * The buyer's hard rules and all money maths run afterwards, in the browser.
+ * Scheduled refreshes (createRefresher) reuse steps 1 to 6, but only run the AI
+ * when the listing's price or availability has changed.
  */
 import { randomBytes } from 'node:crypto';
-import { AppError } from '../errors.js';
+import { AppError, isAppError } from '../errors.js';
 import { toWireSchema } from '../../shared/validate.js';
 import { ASSESSMENT_SCHEMA, SCHEMA_VERSION, validateAssessment } from '../../shared/schema.js';
 import { buildAssessmentMessage, buildResearchMessage } from './prompts.js';
 import { verifySources } from './sources.js';
 import { redactContactDetails } from '../../shared/redact.js';
+import { listingFingerprint, describeChanges } from '../../shared/fingerprint.js';
 
 const WIRE_SCHEMA = toWireSchema(ASSESSMENT_SCHEMA);
 export const MAX_LISTING_CHARS = 40000;
@@ -81,30 +86,40 @@ export function estimateCost(usage, pricing) {
  */
 
 /**
- * @param {{
+ * @typedef {object} PreparedListing
+ * @property {string} text   the listing as the AI sees it: contact details removed, length capped
+ * @property {string} sourceUrl
+ * @property {string} title
+ * @property {boolean} pasted
+ * @property {number} contactDetailsRemoved
+ */
+
+/**
+ * @typedef {{
  *   provider: import('./providers/types.js').Provider,
  *   config: import('../config.js').Config,
  *   prompts: { assess: import('./prompts.js').Prompt, research: import('./prompts.js').Prompt },
  *   fetchListing: (url: string) => Promise<{ finalUrl: string, title: string, text: string }>,
  *   log: import('../logger.js').Logger,
  *   now?: () => Date,
- * }} deps
+ * }} Deps
  */
-export function createAssessor(deps) {
+
+/** @param {Deps} deps */
+function createPipeline(deps) {
   const { provider, config, prompts, fetchListing, log } = deps;
   const now = deps.now || (() => new Date());
 
   /**
-   * @param {AssessInput} input
-   * @param {{ requestId?: string, signal?: AbortSignal }} [ctx]
+   * Get the listing text, pasted or read from its link, ready for the AI.
+   * @param {{ url: string, text: string }} input
+   * @param {string[]} warnings
+   * @returns {Promise<PreparedListing>}
    */
-  return async function assess(input, ctx = {}) {
-    const started = Date.now();
-    /** @type {string[]} */
-    const warnings = [];
-    const pasted = input.listing.text.trim();
+  async function prepareListing(input, warnings) {
+    const pasted = input.text.trim();
     let text = pasted;
-    let sourceUrl = input.listing.url.trim();
+    let sourceUrl = input.url.trim();
     let title = '';
 
     if (!text) {
@@ -129,12 +144,23 @@ export function createAssessor(deps) {
     // Data minimisation: the AI never needs agents' or sellers' contact details.
     const redacted = redactContactDetails(text);
     text = redacted.text;
-    const contactDetailsRemoved = redacted.emails + redacted.phones;
     if (text.length > MAX_LISTING_CHARS) {
       text = text.slice(0, MAX_LISTING_CHARS);
       warnings.push('The listing was long, so only the first part was assessed.');
     }
+    return { text, sourceUrl, title, pasted: Boolean(pasted), contactDetailsRemoved: redacted.emails + redacted.phones };
+  }
 
+  /**
+   * Research the area if asked, assess, validate, and record provenance.
+   * @param {PreparedListing} listing
+   * @param {{ criteria: any, options: { research: boolean } }} input
+   * @param {{ requestId?: string, signal?: AbortSignal }} ctx
+   * @param {string[]} warnings
+   * @param {number} started
+   */
+  async function runAssessment(listing, input, ctx, warnings, started) {
+    const { text, sourceUrl, title } = listing;
     const today = now();
     const todayText = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     const nonce = randomBytes(6).toString('hex');
@@ -225,15 +251,98 @@ export function createAssessor(deps) {
         schemaVersion: SCHEMA_VERSION,
         assessedAt: today.toISOString(),
         durationMs: Date.now() - started,
-        source: { type: pasted ? 'pasted' : 'link', url: sourceUrl, title },
+        source: { type: listing.pasted ? 'pasted' : 'link', url: sourceUrl, title },
         research: { used: Boolean(research), sources: research ? research.sources : [] },
         usage,
         estimatedCostUsd: estimateCost(usage, config.pricing),
         repairs: validation.warnings.length,
         warnings,
-        privacy: { contactDetailsRemoved },
+        privacy: { contactDetailsRemoved: listing.contactDetailsRemoved },
         aiDisclosure: disclosureFor(provider.name, result.model),
+        fingerprint: listingFingerprint(text),
       },
     };
+  }
+
+  return { prepareListing, runAssessment, now };
+}
+
+/**
+ * @param {Deps} deps
+ */
+export function createAssessor(deps) {
+  const pipeline = createPipeline(deps);
+  /**
+   * @param {AssessInput} input
+   * @param {{ requestId?: string, signal?: AbortSignal }} [ctx]
+   */
+  return async function assess(input, ctx = {}) {
+    const started = Date.now();
+    /** @type {string[]} */
+    const warnings = [];
+    const listing = await pipeline.prepareListing(input.listing, warnings);
+    return pipeline.runAssessment(listing, input, ctx, warnings, started);
+  };
+}
+
+/**
+ * @typedef {object} RefreshInput
+ * @property {{ url: string }} listing
+ * @property {import('../../shared/fingerprint.js').Fingerprint} previous  the fingerprint saved with the home
+ * @property {any} criteria   already validated against CRITERIA_SCHEMA
+ * @property {{ research: boolean }} options
+ */
+
+/** @param {string} url */
+function pathOf(url) {
+  try {
+    return new URL(url).pathname.replace(/\/+$/, '') || '/';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Scheduled refreshes: re-read a listing link and compare its fingerprint (price and
+ * availability) with the saved one. The AI only runs again, and the daily cap is only
+ * charged, when something changed. A page that has gone, redirects elsewhere or no
+ * longer shows a price is reported as possibly withdrawn, without asking the AI to
+ * assess whatever page is there now.
+ * @param {Deps} deps
+ */
+export function createRefresher(deps) {
+  const pipeline = createPipeline(deps);
+  /**
+   * @param {RefreshInput} input
+   * @param {{ requestId?: string, signal?: AbortSignal, beforeAi?: () => void }} [ctx]
+   */
+  return async function refresh(input, ctx = {}) {
+    const started = Date.now();
+    const checkedAt = pipeline.now().toISOString();
+    /** @type {string[]} */
+    const warnings = [];
+    /** @param {string} change */
+    const gone = (change) => ({ changed: true, gone: true, checkedAt, changes: [change] });
+    let listing;
+    try {
+      listing = await pipeline.prepareListing({ url: input.listing.url, text: '' }, warnings);
+    } catch (err) {
+      if (isAppError(err) && /** @type {AppError} */ (err).code === 'LISTING_GONE') {
+        return gone('The listing page has gone.');
+      }
+      throw err;
+    }
+    if (pathOf(listing.sourceUrl) !== pathOf(input.listing.url)) {
+      return gone('The listing link now leads to a different page.');
+    }
+    const fingerprint = listingFingerprint(listing.text);
+    if (input.previous.price !== null && fingerprint.price === null) {
+      return gone('The listing page no longer shows a price.');
+    }
+    const changes = describeChanges(input.previous, fingerprint, input.criteria.currency);
+    if (!changes.length) return { changed: false, gone: false, checkedAt, fingerprint };
+    ctx.beforeAi?.();
+    const out = await pipeline.runAssessment(listing, input, ctx, warnings, started);
+    return { changed: true, gone: false, checkedAt, changes, ...out };
   };
 }

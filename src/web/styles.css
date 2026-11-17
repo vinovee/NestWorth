@@ -447,3 +447,9 @@ body:not([data-route="homes"]) .toast { bottom: calc(20px + env(safe-area-inset-
   .card, .panel { padding: 22px; }
   h2.name { font-size: 36px; }
 }
+
+/* What the last scheduled re-check of a listing found */
+.refresh { margin: 4px 0 12px; }
+.refresh .notice { margin-bottom: 8px; }
+.refresh .row { margin: 0 0 8px; }
+.refresh .fine { margin: 0; }

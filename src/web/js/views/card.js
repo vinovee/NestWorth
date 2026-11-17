@@ -5,6 +5,8 @@ import { getState, trackOf, RULED_OUT, REASON_LABELS } from '../store.js';
 import { d } from '../derive.js';
 import { ordinal } from '../ui.js';
 import { openEditFacts, reassess, confirmDelete, openReasonDialog, restore } from '../actions.js';
+import { refreshHome } from '../refresh.js';
+import { canRefresh } from '../schedule.js';
 import { money, money2, moneyShort, signedPct, score, minutesRange, shortDate } from '../../../shared/format.js';
 import { VERDICT_LABELS, PROPERTY_TYPE_LABELS, BUILD_AGE_LABELS } from '../../../shared/schema.js';
 import { TAX_REGIONS } from '../../../shared/tax-rules.js';
@@ -84,7 +86,21 @@ export function renderCard(home, pos) {
     maps,
     h('button', { type: 'button', class: 'tlink alt', onclick: () => openEditFacts(home.id) }, 'Correct facts'),
     home.source.type !== 'manual' ? h('button', { type: 'button', class: 'tlink alt', onclick: () => reassess(home.id) }, 'Assess again') : null,
+    canRefresh(home, t.status) ? h('button', { type: 'button', class: 'tlink alt', onclick: () => refreshHome(home.id) }, 'Check for changes') : null,
     h('button', { type: 'button', class: 'tlink alt danger', onclick: () => confirmDelete(home.id) }, 'Delete'));
+
+  // What the last scheduled re-check of the listing found
+  const rf = home.refresh;
+  const change = rf?.lastChange;
+  const refreshNote = rf ? h('div', { class: 'refresh' },
+    change ? h('p', { class: 'notice' },
+      h('b', null, change.kind === 'gone' ? `May have been withdrawn (${shortDate(change.at)}): ` : `Updated ${shortDate(change.at)}: `),
+      change.changes.join(' ')) : null,
+    rf.result === 'gone' && t.status !== RULED_OUT ? h('div', { class: 'row' },
+      h('button', { type: 'button', class: 'btn small', onclick: () => openReasonDialog(home.id, 'ruleout', ['gone']) }, 'Rule it out')) : null,
+    h('p', { class: 'fine' }, rf.result === 'failed'
+      ? `Couldn’t re-check the listing on ${shortDate(rf.checkedAt)}: ${rf.message}`
+      : `Listing last checked ${shortDate(rf.checkedAt)}${rf.result === 'unchanged' ? ': no change to the price or availability' : ''}.`)) : null;
 
   // Your rules
   const notes = x.policy.notes;
@@ -251,6 +267,7 @@ export function renderCard(home, pos) {
     h('h2', { class: 'name' }, L.title),
     h('p', { class: 'place' }, L.address),
     links,
+    refreshNote,
     statusChip,
     rules,
     priceLine,

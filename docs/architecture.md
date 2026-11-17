@@ -39,11 +39,14 @@ flowchart TB
 | `src/shared/schema.js` | Assessment and criteria schemas, enums and labels |
 | `src/shared/validate.js` | Schema validator and wire-schema converter |
 | `src/shared/profile.js` | Profile shape, defaults, the fictional example, `criteriaForAI` |
+| `src/shared/redact.js` | Removes phone numbers and email addresses from listings before the AI sees them |
+| `src/shared/fingerprint.js` | A listing's price and availability, and plain-English descriptions of changes |
+| `src/shared/review-dates.js` | When tax rules, AI defaults, the compliance mapping and the Node version are next due for review |
 | `src/server/app.js` | Routes, auth, same-origin checks, limits, error handling |
-| `src/server/ai/assess.js` | The pipeline: fetch, research, structured output, validation, repair, source check |
+| `src/server/ai/assess.js` | The pipeline: fetch, redact, research, structured output, validation, repair, source check, AI disclosure; and the refresher |
 | `src/server/ai/providers/*` | Anthropic Messages API, OpenAI-compatible Chat Completions, demo rules |
 | `src/server/listing/*` | SSRF-safe fetcher, robots.txt, HTML to text |
-| `src/web/js/*` | Store, derived values, views and dialogs |
+| `src/web/js/*` | Store, derived values, views, dialogs and the refresh scheduler (`refresh.js`, `schedule.js`) |
 
 ## Request flow: `POST /api/assess`
 
@@ -54,6 +57,17 @@ flowchart TB
 5. Daily cap and concurrency gate.
 6. The pipeline runs with an abort signal tied to the client connection, so closing the dialog stops paying for the answer.
 7. A structured log line records timings and token use, never content.
+
+## Request flow: `POST /api/refresh`
+
+The browser's scheduler sends a home's link and its saved fingerprint (price and availability). Steps 1 to 4 and the concurrency gate are the same as above; then:
+
+1. The page is read with the same safe fetcher, and contact details are removed.
+2. If the page has gone (404 or 410), now redirects to a different path, or no longer shows a price, the answer is "may have been withdrawn", without asking the AI to assess whatever page is there now.
+3. Otherwise the new fingerprint is compared with the saved one. If nothing changed, the answer says so: no AI call, and nothing counts towards the daily cap.
+4. If the price or availability changed, the daily cap is charged and the normal assessment pipeline runs; the answer lists the changes in plain English.
+
+The browser keeps the buyer's status, notes, rating and corrections, and records each check on the home. It re-checks only active homes added by link, on the schedule in the profile, while the app is open (and catches up when it is next opened), with a pause between homes. It stops a run when the server reports a rate limit, the daily cap or a busy server.
 
 Errors are `AppError`s with an HTTP status, a stable `code` and a plain-English message. Unexpected errors become a generic 500 and their details stay in the server log.
 

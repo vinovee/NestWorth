@@ -56,10 +56,11 @@ export function restore(id) {
  * Ask why a home is being ruled out (or edit the reason later).
  * @param {string} id
  * @param {'ruleout' | 'edit'} mode
+ * @param {string[]} [preselect] reasons to tick if none are saved yet
  */
-export function openReasonDialog(id, mode) {
+export function openReasonDialog(id, mode, preselect = []) {
   const t = trackOf(id);
-  const picked = new Set(t.reasons);
+  const picked = new Set(t.reasons.length ? t.reasons : preselect);
   const text = /** @type {HTMLTextAreaElement} */ (h('textarea', { id: 'reasonText', rows: 3, maxlength: 2000, placeholder: 'For example: small garden, kitchen too narrow, price won’t come down…' }));
   text.value = t.reasonText;
   const tags = REASONS.map(([key, label]) => h('button', {

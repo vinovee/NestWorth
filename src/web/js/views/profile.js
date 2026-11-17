@@ -4,6 +4,7 @@ import { h, mount, extLink } from '../dom.js';
 import { ui, toast, openDialog, closeDialog, go } from '../ui.js';
 import { getState, setProfile, exportJson, importJson, clearAll } from '../store.js';
 import * as api from '../api.js';
+import { runRefresh } from '../refresh.js';
 import { normaliseProfile, missingProfileItems, BUILD_AGE_PREFS, BUILD_AGE_PREF_LABELS, EXAMPLE_PROFILE } from '../../../shared/profile.js';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../shared/schema.js';
 import { TAX_REGIONS, BUYER_STATUSES, RULES_LAST_CHECKED } from '../../../shared/tax-rules.js';
@@ -210,6 +211,13 @@ export function renderProfile(main) {
       h('button', { type: 'button', class: 'btn small', onclick: () => { api.setToken(tokenInput.value.trim()); toast('Access token saved for this tab.'); } }, 'Save token')) : null,
   ]);
 
+  const keepUpToDate = section('Keeping homes up to date', 'Homes you added by link can be re-checked automatically, so price changes, offers and withdrawn listings show up by themselves.', [
+    select('refresh.frequency', 'Re-check homes added by link', [['weekly', 'Every week'], ['daily', 'Every day'], ['off', 'Off']]),
+    h('p', { class: 'hint' }, 'NestWorth re-reads the page of each active home you added by link, skipping homes you’ve ruled out. It asks the AI again only if the price or availability has changed, so unchanged homes cost nothing. Checks run while NestWorth is open in a browser tab, and catch up when you next open it. Pasted listings can’t be re-checked.'),
+    health && !health.listingFetch ? h('p', { class: 'notice' }, 'This server doesn’t read links, so homes can’t be re-checked.') : null,
+    h('button', { type: 'button', class: 'btn small', onclick: () => runRefresh({ force: true, announce: true }) }, 'Check all now'),
+  ]);
+
   const fileInput = /** @type {HTMLInputElement} */ (h('input', { type: 'file', accept: 'application/json,.json', hidden: true }));
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
@@ -309,6 +317,7 @@ export function renderProfile(main) {
         input('resale.growthAnnualPct', 'Growth each year after that', { kind: 'pct', suffix: '%' }),
         input('resale.newBuildPremiumPct', 'New-build premium lost on day one', { kind: 'pct', suffix: '%' })),
     ]),
+    keepUpToDate,
     server,
     data);
   refreshSummary();

@@ -7,7 +7,9 @@ import { d, bestHome } from '../derive.js';
 import { changeStatus, viewHome, openReasonDialog } from '../actions.js';
 import { pill, VCLS } from './card.js';
 import { openAddHome, loadDemo } from './add-home.js';
-import { money, moneyShort, minutesRange } from '../../../shared/format.js';
+import { money, moneyShort, minutesRange, shortDate } from '../../../shared/format.js';
+import { canRefresh } from '../schedule.js';
+import { runRefresh } from '../refresh.js';
 import { VERDICT_LABELS } from '../../../shared/schema.js';
 import { cashAvailable, maxPriceForMonthly, maxPriceForDeposit, sensitivities } from '../../../shared/finance.js';
 import { missingProfileItems } from '../../../shared/profile.js';
@@ -23,7 +25,39 @@ export function renderDashboard(main) {
     mount(main, welcome(), state.profileSaved ? limitsPanel() : null);
     return;
   }
-  mount(main, glancePanel(), bestPanel(), queuePanel(), activePanel(), limitsPanel(), reasonsPanel());
+  mount(main, glancePanel(), changesPanel(), bestPanel(), queuePanel(), activePanel(), limitsPanel(), reasonsPanel());
+}
+
+/** Price changes, offers and withdrawn listings found by scheduled re-checks. */
+function changesPanel() {
+  const state = getState();
+  const frequency = state.profile.refresh.frequency;
+  const homes = Object.values(state.homes);
+  const linked = homes.filter((x) => canRefresh(x, trackOf(x.id).status));
+  const since = Date.now() - 30 * 86400000;
+  const recent = homes
+    .filter((x) => x.refresh?.lastChange && Date.parse(x.refresh.lastChange.at) >= since && trackOf(x.id).status !== RULED_OUT)
+    .sort((a, b) => (b.refresh?.lastChange?.at || '').localeCompare(a.refresh?.lastChange?.at || ''));
+  if (!linked.length && !recent.length) return null;
+  const lastCheck = linked.map((x) => x.refresh?.checkedAt || '').filter(Boolean).sort().at(-1);
+  const n = linked.length;
+  const homesText = `${n} active home${n === 1 ? '' : 's'} added by link`;
+  return h('section', { class: 'panel', 'aria-labelledby': 'cTitle' },
+    h('div', { class: 'phead' }, h('h3', { id: 'cTitle' }, 'Changes to your homes'), recent.length ? h('span', { class: 'fine' }, `${recent.length} in the last 30 days`) : null),
+    recent.length
+      ? h('ul', { class: 'rlist' }, ...recent.map((x) => {
+        const c = /** @type {NonNullable<import('../store.js').RefreshInfo['lastChange']>} */ (x.refresh?.lastChange);
+        return h('li', null, h('div', null,
+          h('button', { type: 'button', class: 'linkbtn rn', onclick: () => viewHome(x.id) }, x.assessment.listing.title),
+          h('p', { class: 'rw' }, `${shortDate(c.at)}: ${c.kind === 'gone' ? 'may have been withdrawn. ' : ''}${c.changes.join(' ')}`)));
+      }))
+      : h('p', { class: 'muted' }, 'No changes found in the last 30 days.'),
+    h('p', { class: 'fine' }, frequency === 'off'
+      ? `Automatic checks are off. ${homesText} can be re-checked.`
+      : `${homesText} ${n === 1 ? 'is' : 'are'} re-checked ${frequency === 'daily' ? 'every day' : 'every week'} while NestWorth is open${lastCheck ? `; last check ${shortDate(lastCheck)}` : ''}. The AI only runs again if the price or availability changed.`),
+    h('div', { class: 'row' },
+      n ? h('button', { type: 'button', class: 'btn small', onclick: () => runRefresh({ force: true, announce: true }) }, 'Check now') : null,
+      h('button', { type: 'button', class: 'linkbtn', onclick: () => go('#/profile') }, frequency === 'off' ? 'Turn on automatic checks' : 'Change how often')));
 }
 
 function welcome() {

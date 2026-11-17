@@ -3,11 +3,20 @@
  * Configuration comes from environment variables (see .env.example). Everything is
  * validated at start-up so mistakes fail loudly and early, with a fix in the message.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** The app's version, from package.json, so the health check never drifts from a release. */
+function packageVersion() {
+  try {
+    return String(JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
 
 /**
@@ -134,7 +143,7 @@ export function loadConfig(env = process.env, argv = process.argv.slice(2)) {
       shared: path.join(ROOT, 'src', 'shared'),
       prompts: path.join(ROOT, 'prompts'),
     },
-    version: '0.1.0',
+    version: packageVersion(),
   };
 
   if (provider === 'anthropic' && !config.anthropic.apiKey) {

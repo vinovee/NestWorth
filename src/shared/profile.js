@@ -27,6 +27,7 @@ import { maxPriceForMonthly } from './finance.js';
  * @property {{ propertyTypes: string[], minBedrooms: number, buildAge: string, mustHaves: string[], niceToHaves: string[], areasFocus: string[], areasAvoid: string[], flexOrder: string[], exclude: { sharedOwnership: boolean, retirement: boolean, renovation: boolean, auction: string, leasehold: string }, notesForAI: string }} search
  * @property {{ horizonYears: number, growth5yPct: number, growthAnnualPct: number, newBuildPremiumPct: number, useMine: boolean }} resale
  * @property {{ research: boolean }} ai
+ * @property {{ frequency: 'weekly' | 'daily' | 'off' }} refresh  how often to re-check homes added by link
  */
 
 export const PROFILE_VERSION = 1;
@@ -38,6 +39,7 @@ export const BUILD_AGE_PREF_LABELS = {
   any: 'Any age or condition',
 };
 export const FLAG_CHOICES = ['allow', 'flag', 'exclude'];
+export const REFRESH_FREQUENCIES = ['weekly', 'daily', 'off'];
 
 /** Illustrative rates only. Every user should replace them with their broker's quotes. */
 export const EXAMPLE_RATE_BANDS = [
@@ -72,6 +74,7 @@ export const DEFAULT_PROFILE = {
   },
   resale: { horizonYears: 10, growth5yPct: 10, growthAnnualPct: 2.5, newBuildPremiumPct: 8, useMine: false },
   ai: { research: false },
+  refresh: { frequency: 'weekly' },
 };
 
 /**
@@ -168,6 +171,7 @@ export const PROFILE_SCHEMA = obj({
     useMine: { type: 'boolean' },
   }),
   ai: obj({ research: { type: 'boolean' } }),
+  refresh: obj({ frequency: { type: 'string', enum: REFRESH_FREQUENCIES } }),
 });
 
 const isPlainObject = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);

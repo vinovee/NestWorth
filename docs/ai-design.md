@@ -101,6 +101,7 @@ Add a case whenever a real listing fools the app (rewrite it with fictional deta
 - Rate limit per client, a daily cap and a cap on concurrent assessments.
 - Web research is off by default and capped by `WEB_SEARCH_MAX_USES`.
 - The system prompt is marked for caching.
+- Scheduled re-checks compare a cheap fingerprint of the listing (its price and availability) and only call the AI when it changed; unchanged checks don't count towards the daily cap. Pages that have gone, redirect elsewhere or lose their price are reported as possibly withdrawn instead of being assessed, and research is never run automatically.
 - Token use (and an optional cost estimate) is logged for each assessment, without content.
 
 ## Choosing a model

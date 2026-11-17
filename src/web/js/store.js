@@ -37,6 +37,15 @@ export const REASON_LABELS = Object.fromEntries(REASONS);
  * @property {any} assessment
  * @property {any} meta
  * @property {Record<string, any>} overrides
+ * @property {RefreshInfo} [refresh]   set once the listing has been re-checked
+ */
+/**
+ * The outcome of re-checking a home's listing, and the last change it found.
+ * @typedef {object} RefreshInfo
+ * @property {string} checkedAt
+ * @property {'unchanged' | 'updated' | 'gone' | 'failed'} result
+ * @property {string} message   why the last check failed
+ * @property {{ at: string, kind: 'updated' | 'gone', changes: string[] } | null} lastChange
  */
 /**
  * @typedef {object} Track
@@ -151,6 +160,45 @@ export function replaceAssessment(id, next) {
   home.meta = next.meta;
   if (next.listingText) home.listingText = next.listingText.slice(0, 30000);
   home.updatedAt = nowIso();
+  changed('homes');
+}
+
+/**
+ * Record a re-check that didn't change the assessment: nothing changed, the listing
+ * may have gone, or it couldn't be read. Leaves `updatedAt` alone, because nothing
+ * that costs or rules depend on has changed.
+ * @param {string} id
+ * @param {{ result: 'unchanged' | 'gone' | 'failed', checkedAt: string, message?: string, changes?: string[], fingerprint?: any }} r
+ */
+export function recordRefresh(id, r) {
+  const home = state.homes[id];
+  if (!home) return;
+  home.refresh = {
+    checkedAt: r.checkedAt,
+    result: r.result,
+    message: (r.message || '').slice(0, 300),
+    lastChange: r.result === 'gone'
+      ? { at: r.checkedAt, kind: 'gone', changes: (r.changes || []).slice(0, 6) }
+      : home.refresh?.lastChange || null,
+  };
+  if (r.fingerprint) home.meta = { ...home.meta, fingerprint: r.fingerprint };
+  changed('homes');
+}
+
+/**
+ * Replace a home's assessment after a re-check found its listing had changed.
+ * Your status, notes, rating and corrections are kept.
+ * @param {string} id
+ * @param {{ checkedAt: string, changes: string[], assessment: any, meta: any, listingText: string }} out
+ */
+export function applyRefreshUpdate(id, out) {
+  const home = state.homes[id];
+  if (!home) return;
+  home.assessment = out.assessment;
+  home.meta = out.meta;
+  if (out.listingText) home.listingText = out.listingText.slice(0, 30000);
+  home.updatedAt = nowIso();
+  home.refresh = { checkedAt: out.checkedAt, result: 'updated', message: '', lastChange: { at: out.checkedAt, kind: 'updated', changes: out.changes.slice(0, 6) } };
   changed('homes');
 }
 
@@ -275,6 +323,7 @@ function sanitiseData(raw) {
       assessment: validateAssessment(h.assessment).value,
       meta: h.meta && typeof h.meta === 'object' ? h.meta : {},
       overrides: sanitiseOverrides(h.overrides),
+      refresh: sanitiseRefresh(h.refresh),
     };
   }
   /** @type {Record<string, Track>} */
@@ -294,6 +343,24 @@ function sanitiseData(raw) {
     };
   }
   return { data: { profile: prof.profile, homes, track }, profileOk: prof.ok, skipped };
+}
+
+/**
+ * @param {any} r
+ * @returns {RefreshInfo | undefined}
+ */
+function sanitiseRefresh(r) {
+  if (!r || typeof r !== 'object' || typeof r.checkedAt !== 'string') return undefined;
+  const c = r.lastChange;
+  const lastChange = c && typeof c === 'object' && typeof c.at === 'string' && (c.kind === 'updated' || c.kind === 'gone')
+    ? { at: c.at, kind: /** @type {'updated' | 'gone'} */ (c.kind), changes: Array.isArray(c.changes) ? c.changes.filter((/** @type {unknown} */ x) => typeof x === 'string').slice(0, 6).map((/** @type {string} */ x) => x.slice(0, 300)) : [] }
+    : null;
+  return {
+    checkedAt: r.checkedAt,
+    result: ['unchanged', 'updated', 'gone', 'failed'].includes(r.result) ? r.result : 'unchanged',
+    message: typeof r.message === 'string' ? r.message.slice(0, 300) : '',
+    lastChange,
+  };
 }
 
 /** @param {any} o */

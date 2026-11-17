@@ -31,6 +31,7 @@ NestWorth splits the job. The AI reads listings and judges fit; tested code does
 - **Does the maths properly.** Stamp duty for England and Northern Ireland (SDLT), Scotland (LBTT) and Wales (LTT), or your own bands; the cash released by selling your current home; deposit, loan-to-value, rate band and monthly repayment; commute fares per month; resale scenarios; and how the monthly payment moves with price, sale price and rates.
 - **Flags what you asked to see.** Auctions (including the Modern Method of Auction), leasehold, homes under offer, areas that may feel deserted, and listings that try to manipulate the AI.
 - **Tracks your search.** For review → Shortlisted → Enquired → Viewing booked → Viewed → Offer made, or Ruled out with a reason. Notes and your own 1–10 rating per home. A dashboard shows what needs deciding and what keeps putting you off.
+- **Keeps your homes up to date.** Homes you added by link are re-checked every week (or every day, or never) while NestWorth is open. Price changes, offers and withdrawn listings show up on the dashboard and the home itself, and the AI only runs again when the price or availability has changed.
 - **Lets you correct the AI.** Fix any key fact (price, bedrooms, commute, fares); costs, rules and verdicts update straight away.
 - **Keeps your data yours.** Everything is stored in your browser. Export and import a JSON backup. Your sale price, mortgage balance and savings are never sent to the server or the AI.
 

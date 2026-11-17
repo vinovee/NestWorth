@@ -4,6 +4,7 @@
  *
  *   GET  /api/health   what this server can do (provider, model, research, auth)
  *   POST /api/assess   assess one listing against the criteria sent with it
+ *   POST /api/refresh  re-read a listing link; assess it again only if it changed
  *
  * The server is stateless: it keeps no listings, profiles or results. Each request
  * carries what it needs and the browser stores the answer.
@@ -13,12 +14,21 @@ import { AppError, isAppError } from './errors.js';
 import { setSecurityHeaders, sendJson, readJsonBody, clientKey } from './http.js';
 import { createRateLimiter, createDailyCap, createConcurrencyGate } from './rate-limit.js';
 import { createStaticHandler } from './static.js';
-import { createAssessor } from './ai/assess.js';
+import { createAssessor, createRefresher } from './ai/assess.js';
 import { loadPrompts } from './ai/prompts.js';
 import { validate } from '../shared/validate.js';
 import { CRITERIA_SCHEMA } from '../shared/schema.js';
+import { LISTING_STATUSES } from '../shared/fingerprint.js';
 
 const MAX_BODY_BYTES = 512 * 1024;
+
+/** @type {import('../shared/validate.js').Schema} */
+const OPTIONS = {
+  type: 'object',
+  properties: { research: { type: 'boolean' } },
+  required: ['research'],
+  additionalProperties: false,
+};
 
 /** @type {import('../shared/validate.js').Schema} */
 const ASSESS_REQUEST = {
@@ -31,16 +41,56 @@ const ASSESS_REQUEST = {
       additionalProperties: false,
     },
     criteria: CRITERIA_SCHEMA,
-    options: {
-      type: 'object',
-      properties: { research: { type: 'boolean' } },
-      required: ['research'],
-      additionalProperties: false,
-    },
+    options: OPTIONS,
   },
   required: ['listing', 'criteria', 'options'],
   additionalProperties: false,
 };
+
+/** @type {import('../shared/validate.js').Schema} */
+const REFRESH_REQUEST = {
+  type: 'object',
+  properties: {
+    listing: {
+      type: 'object',
+      properties: { url: { type: 'string', maxLength: 2048 } },
+      required: ['url'],
+      additionalProperties: false,
+    },
+    previous: {
+      type: 'object',
+      properties: {
+        price: { anyOf: [{ type: 'number', minimum: 0, maximum: 1e9 }, { type: 'null' }] },
+        status: { type: 'string', enum: LISTING_STATUSES },
+      },
+      required: ['price', 'status'],
+      additionalProperties: false,
+    },
+    criteria: CRITERIA_SCHEMA,
+    options: OPTIONS,
+  },
+  required: ['listing', 'previous', 'criteria', 'options'],
+  additionalProperties: false,
+};
+
+const DAILY_LIMIT_MESSAGE = 'This server has reached its daily limit of assessments. Try again tomorrow.';
+
+/**
+ * What gets logged about an assessment: usage and timing, never content.
+ * @param {any} meta
+ */
+const usageLog = (meta) => ({
+  provider: meta.provider,
+  model: meta.model,
+  ms: meta.durationMs,
+  inputTokens: meta.usage.inputTokens,
+  outputTokens: meta.usage.outputTokens,
+  webSearches: meta.usage.webSearches,
+  costUsd: meta.estimatedCostUsd,
+  research: meta.research.used,
+  warnings: meta.warnings.length,
+  contactDetailsRemoved: meta.privacy.contactDetailsRemoved,
+});
 
 /** @param {string} a @param {string} b */
 function safeEqual(a, b) {
@@ -62,6 +112,7 @@ export function createApp(deps) {
   const { config, provider, log } = deps;
   const prompts = loadPrompts(config.paths.prompts);
   const assess = createAssessor({ provider, config, prompts, fetchListing: deps.fetchListing, log, now: deps.now });
+  const refresh = createRefresher({ provider, config, prompts, fetchListing: deps.fetchListing, log, now: deps.now });
   const limiter = createRateLimiter(config.rateLimit);
   const daily = createDailyCap(config.dailyLimit);
   const gate = createConcurrencyGate(config.maxConcurrent);
@@ -101,6 +152,49 @@ export function createApp(deps) {
   }
 
   /**
+   * What every POST route checks first: same origin, the access token, the rate
+   * limit, then a JSON body that must match the schema.
+   * @param {import('node:http').IncomingMessage} req
+   * @param {import('node:http').ServerResponse} res
+   * @param {import('../shared/validate.js').Schema} schema
+   */
+  async function readGuardedBody(req, res, schema) {
+    checkSameOrigin(req);
+    checkAuth(req);
+    const limit = limiter.take(clientKey(req, config.trustProxy));
+    if (!limit.ok) {
+      res.setHeader('Retry-After', String(limit.retryAfterSec));
+      throw new AppError(429, 'RATE_LIMITED', `Too many requests in a short time. Try again in ${Math.ceil(limit.retryAfterSec / 60)} minute(s).`);
+    }
+    const body = await readJsonBody(req, MAX_BODY_BYTES);
+    const checked = validate(schema, body);
+    if (!checked.ok) throw new AppError(400, 'BAD_REQUEST', `The request was not valid: ${checked.errors.slice(0, 3).join('; ')}`);
+    return checked.value;
+  }
+
+  /**
+   * Run work inside the concurrency limit, cancelling it if the browser goes away.
+   * @template T
+   * @param {import('node:http').ServerResponse} res
+   * @param {(signal: AbortSignal) => Promise<T>} work
+   * @returns {Promise<T>}
+   */
+  async function gated(res, work) {
+    if (!gate.tryEnter()) throw new AppError(503, 'BUSY', 'The server is busy with other assessments. Try again in a minute.', { retryable: true });
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on('close', onClose);
+    try {
+      return await work(controller.signal);
+    } finally {
+      res.off('close', onClose);
+      gate.leave();
+    }
+  }
+
+  /**
    * @param {import('node:http').IncomingMessage} req
    * @param {import('node:http').ServerResponse} res
    * @param {URL} url
@@ -125,43 +219,24 @@ export function createApp(deps) {
 
     if (url.pathname === '/api/assess') {
       if (req.method !== 'POST') throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
-      checkSameOrigin(req);
-      checkAuth(req);
-      const limit = limiter.take(clientKey(req, config.trustProxy));
-      if (!limit.ok) {
-        res.setHeader('Retry-After', String(limit.retryAfterSec));
-        throw new AppError(429, 'RATE_LIMITED', `Too many assessments in a short time. Try again in ${Math.ceil(limit.retryAfterSec / 60)} minute(s).`);
-      }
-      const body = await readJsonBody(req, MAX_BODY_BYTES);
-      const checked = validate(ASSESS_REQUEST, body);
-      if (!checked.ok) throw new AppError(400, 'BAD_REQUEST', `The request was not valid: ${checked.errors.slice(0, 3).join('; ')}`);
-      if (!daily.take()) throw new AppError(429, 'DAILY_LIMIT', 'This server has reached its daily limit of assessments. Try again tomorrow.');
-      if (!gate.tryEnter()) throw new AppError(503, 'BUSY', 'The server is busy with other assessments. Try again in a minute.', { retryable: true });
+      const input = await readGuardedBody(req, res, ASSESS_REQUEST);
+      if (!daily.take()) throw new AppError(429, 'DAILY_LIMIT', DAILY_LIMIT_MESSAGE);
+      const out = await gated(res, (signal) => assess(input, { requestId, signal }));
+      log.info('assessment complete', { requestId, ...usageLog(out.meta) });
+      sendJson(res, 200, out);
+      return;
+    }
 
-      const controller = new AbortController();
-      const onClose = () => {
-        if (!res.writableEnded) controller.abort();
+    if (url.pathname === '/api/refresh') {
+      if (req.method !== 'POST') throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
+      const input = await readGuardedBody(req, res, REFRESH_REQUEST);
+      if (!config.allowListingFetch) throw new AppError(400, 'FETCH_DISABLED', 'This server doesn’t read links, so homes can’t be re-checked.');
+      const beforeAi = () => {
+        if (!daily.take()) throw new AppError(429, 'DAILY_LIMIT', DAILY_LIMIT_MESSAGE);
       };
-      res.on('close', onClose);
-      try {
-        const out = await assess(checked.value, { requestId, signal: controller.signal });
-        log.info('assessment complete', {
-          requestId,
-          provider: out.meta.provider,
-          model: out.meta.model,
-          ms: out.meta.durationMs,
-          inputTokens: out.meta.usage.inputTokens,
-          outputTokens: out.meta.usage.outputTokens,
-          webSearches: out.meta.usage.webSearches,
-          costUsd: out.meta.estimatedCostUsd,
-          research: out.meta.research.used,
-          warnings: out.meta.warnings.length,
-        });
-        sendJson(res, 200, out);
-      } finally {
-        res.off('close', onClose);
-        gate.leave();
-      }
+      const out = await gated(res, (signal) => refresh(/** @type {any} */ (input), { requestId, signal, beforeAi }));
+      log.info('refresh complete', { requestId, changed: out.changed, gone: out.gone, ...('meta' in out && out.meta ? usageLog(out.meta) : {}) });
+      sendJson(res, 200, out);
       return;
     }
 
