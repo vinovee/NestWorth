@@ -36,7 +36,7 @@ NestWorth splits the job. The AI reads listings and judges fit; tested code does
 
 ## Quick start
 
-You need [Node.js](https://nodejs.org) 22 or later. The app has **no runtime dependencies**, so there is nothing to install to run it.
+You need [Node.js](https://nodejs.org) 22 or later (26 LTS recommended). The app has **no runtime dependencies**, so there is nothing to install to run it.
 
 ### Try it without an API key (demo mode)
 

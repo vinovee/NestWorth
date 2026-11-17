@@ -1,5 +1,5 @@
 # NestWorth: a small, non-root image. The app has no runtime dependencies.
-FROM node:22-alpine
+FROM node:26-alpine
 
 LABEL org.opencontainers.image.title="NestWorth" \
       org.opencontainers.image.description="AI home-search assistant for UK buyers: your numbers, your rules, a detailed picture of every home." \
