@@ -161,9 +161,18 @@ npm install          # dev tools only: ESLint, TypeScript, Node types
 npm run dev          # restart on change (needs .env, or use npm run demo)
 npm run check        # lint, type-check (JSDoc + TypeScript), tests, demo evals
 npm run eval         # evals against your configured provider
+npm run maintenance  # which facts (tax rules, AI prices, compliance) are due for review
 ```
 
 The code is JavaScript with JSDoc types, checked by TypeScript in strict mode, so the browser runs the same files the tests check, with no bundler. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/architecture.md](docs/architecture.md).
+
+## Keeping NestWorth up to date
+
+- **Dependencies.** Dependabot proposes updates to the dev tools and GitHub Actions every week, and to the Docker base image every month. CI must pass before you merge one.
+- **Facts that go out of date.** Tax rules, the default AI model and its prices, the compliance mapping and the minimum Node.js version each have a review date in [`src/shared/review-dates.js`](src/shared/review-dates.js). The weekly [Maintenance workflow](.github/workflows/maintenance.yml) runs every check on the newest Node LTS, audits dependencies and opens a `maintenance` issue when something is due. `npm run maintenance` shows the same report on your machine.
+- **Your own copy.** `git pull` and restart, or `docker compose up --build -d`. Your homes live in your browser, so updating the server never touches them.
+
+GitHub pauses scheduled workflows in public repositories after 60 days without activity. If that happens, re-enable the workflow from the Actions tab.
 
 ## Limitations
 
