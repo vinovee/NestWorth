@@ -6,6 +6,7 @@
 [![CodeQL](https://github.com/vinovee/NestWorth/actions/workflows/codeql.yml/badge.svg)](https://github.com/vinovee/NestWorth/actions/workflows/codeql.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Node.js 22 or later](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](https://nodejs.org)
+[![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
 
 Tell NestWorth what you need and what you can afford, add property listings by link or by pasting them, and get a frank assessment of each one: checked against your own rules, with every number worked out in code rather than by the AI. You run it yourself, with your own AI key, or in demo mode with none. No accounts, no tracking: your profile, homes and notes stay in your browser.
 
@@ -156,15 +157,20 @@ src/
     schema.js    the assessment schema (also sent to the model)
     validate.js  schema validator and wire-schema converter
     profile.js   inputs, defaults, the fictional example buyer
+    redact.js    removes phone numbers and emails before text reaches the AI
+    fingerprint.js  price and availability check used by scheduled refresh
+    manual.js    a schema-valid assessment for a home entered by hand
+    review-dates.js  facts that go out of date, and when each was checked
   server/      zero-dependency Node HTTP server
-    ai/          provider adapters, prompts, the assessment pipeline
+    ai/          provider adapters, prompts, the assessment pipeline, the refresher
     listing/     safe link fetching, robots.txt, HTML to text
   web/         the app: plain ES modules, no build step
 prompts/       versioned system prompts
 evals/         evaluation cases and runner
 examples/      fictional listings used by the demo, tests and evals
+scripts/       the maintenance report run by the weekly workflow
 test/          node:test unit and integration tests
-docs/          architecture, AI design, configuration, decisions
+docs/          architecture, AI design, configuration, compliance, decisions
 ```
 
 ## Development
@@ -201,7 +207,9 @@ Journey-planner APIs for exact commute times; postcode lookups for flood, crime 
 
 ## Project status
 
-Early release (0.1.0). It works end to end, but expect changes between versions; notable ones are listed in the [changelog](CHANGELOG.md).
+Early release (0.2.0, 17 November 2026). It works end to end, but expect changes between versions; notable ones are listed in the [changelog](CHANGELOG.md).
+
+New in 0.2.0: scheduled refresh of homes added by link, "AI-generated" labels with machine-readable disclosure metadata, removal of contact details from listings before they reach the AI, fairness rules in both prompts, a weekly maintenance workflow, and the responsible AI and compliance documents.
 
 ## Getting help
 
